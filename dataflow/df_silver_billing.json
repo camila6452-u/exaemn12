@@ -1,0 +1,118 @@
+{
+	"name": "df_silver_billing",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "srcBilling"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "srcSilverAdmissions"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkBilling"
+				}
+			],
+			"transformations": [
+				{
+					"name": "derivedColumn1"
+				},
+				{
+					"name": "derivedColumn2"
+				},
+				{
+					"name": "filter1"
+				},
+				{
+					"name": "exists1"
+				},
+				{
+					"name": "select1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          billing_id as string,",
+				"          admission_id as string,",
+				"          charge_type as string,",
+				"          amount as string,",
+				"          payment_status as string,",
+				"          payment_date as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'bronze',",
+				"     tableName: 'billing',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> srcBilling",
+				"source(output(",
+				"          admission_id as integer,",
+				"          patient_id as integer,",
+				"          admission_date as date,",
+				"          discharge_date as date,",
+				"          department as string,",
+				"          attending_doctor_id as integer",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'admissions',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> srcSilverAdmissions",
+				"srcBilling derive(billing_id = toInteger(trim(billing_id)),",
+				"          admission_id = toInteger(trim(admission_id)),",
+				"          charge_type = iif(isNull(charge_type) || trim(charge_type)=='','Unknown',trim(charge_type)),",
+				"          a = regexReplace(upper(amount),'[^0-9.\\\\-]',''),",
+				"          payment_status =      case(lower(trim(payment_status))=='paid','Paid',lower(trim(payment_status))=='unpaid','Unpaid',lower(trim(payment_status))=='pending','Pending',lower(trim(payment_status))=='overdue','Overdue','Unknown'),",
+				"          pd_raw = iif(regexMatch(trim(payment_date),'^\\\\d{4}-\\\\d{2}-\\\\d{2}$'), toDate(trim(payment_date),'yyyy-MM-dd'), iif(regexMatch(trim(payment_date),'^\\\\d{2}/\\\\d{2}/\\\\d{4}$'), toDate(trim(payment_date),'MM/dd/yyyy'), iif(regexMatch(trim(payment_date),'^\\\\d{2}-\\\\d{2}-\\\\d{2}$'), toDate(substring(trim(payment_date),1,6)+iif(toInteger(substring(trim(payment_date),7,2))>26,'19','20')+substring(trim(payment_date),7,2),'MM-dd-yyyy'), iif(regexMatch(trim(payment_date),'^\\\\d{2}-[A-Za-z]{3}-\\\\d{4}$'), toDate(trim(payment_date),'dd-MMM-yyyy'), iif(regexMatch(trim(payment_date),'^[A-Za-z]+ \\\\d{2}, \\\\d{4}$'), toDate(trim(payment_date),'MMMM dd, yyyy'), toDate(null()))))))) ~> derivedColumn1",
+				"derivedColumn1 derive(amount = toDecimal(abs(round(toDouble(a),2)),12,2),",
+				"          payment_date = iif(payment_status=='Paid' && pd_raw<=currentDate(), pd_raw, toDate(null()))) ~> derivedColumn2",
+				"derivedColumn2 filter(!isNull(billing_id) && !isNull(amount) && amount>0 && amount<=50000) ~> filter1",
+				"filter1, srcSilverAdmissions exists(derivedColumn1@admission_id == srcSilverAdmissions@admission_id,",
+				"     negate:false,",
+				"     broadcast: 'auto')~> exists1",
+				"exists1 select(mapColumn(",
+				"          billing_id,",
+				"          admission_id,",
+				"          charge_type,",
+				"          amount,",
+				"          payment_status,",
+				"          payment_date",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"select1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'billing',",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     stagingSchemaName: '',",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> sinkBilling"
+			]
+		}
+	}
+}
