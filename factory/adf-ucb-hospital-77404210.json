@@ -1,0 +1,11 @@
+{
+	"name": "adf-ucb-hospital-77404210",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true,
+			"isExplicitlySet": false
+		}
+	},
+	"location": "brazilsouth"
+}
