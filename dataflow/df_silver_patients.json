@@ -1,0 +1,103 @@
+{
+	"name": "df_silver_patients",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "srcPatients"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sink1"
+				}
+			],
+			"transformations": [
+				{
+					"name": "derivedColumn1"
+				},
+				{
+					"name": "derivedColumn2"
+				},
+				{
+					"name": "window1"
+				},
+				{
+					"name": "filter1"
+				},
+				{
+					"name": "select1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          patient_id as string,",
+				"          full_name as string,",
+				"          gender as string,",
+				"          date_of_birth as string,",
+				"          phone as string,",
+				"          email as string,",
+				"          address as string,",
+				"          insurance_provider as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'query',",
+				"     store: 'sqlserver',",
+				"     query: 'SELECT * FROM bronze.patients',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> srcPatients",
+				"srcPatients derive(patient_id = toInteger(trim(patient_id)),",
+				"          full_name = regexReplace(trim(full_name),'[^A-Za-z.]+$',''),",
+				"          gender = iif(lower(trim(gender))=='m' || lower(trim(gender))=='male','Male',iif(lower(trim(gender))=='f' || lower(trim(gender))=='female','Female','Unknown')),",
+				"          phone = iif(isNull(phone) || lower(trim(phone))=='unknown', toString(null()), regexReplace(phone,'[^0-9+]','')),",
+				"          dob_raw = iif(regexMatch(trim(date_of_birth),'^\\\\d{4}-\\\\d{2}-\\\\d{2}$'), toDate(trim(date_of_birth),'yyyy-MM-dd'), iif(regexMatch(trim(date_of_birth),'^\\\\d{2}/\\\\d{2}/\\\\d{4}$'), toDate(trim(date_of_birth),'MM/dd/yyyy'), iif(regexMatch(trim(date_of_birth),'^\\\\d{2}-\\\\d{2}-\\\\d{2}$'), toDate(substring(trim(date_of_birth),1,6)+iif(toInteger(substring(trim(date_of_birth),7,2))>26,'19','20')+substring(trim(date_of_birth),7,2),'MM-dd-yyyy'), iif(regexMatch(trim(date_of_birth),'^\\\\d{2}-[A-Za-z]{3}-\\\\d{4}$'), toDate(trim(date_of_birth),'dd-MMM-yyyy'), iif(regexMatch(trim(date_of_birth),'^[A-Za-z]+ \\\\d{2}, \\\\d{4}$'), toDate(trim(date_of_birth),'MMMM dd, yyyy'), toDate(null())))))),",
+				"          email_tmp = replace(replace(replace(replace(lower(trim(email)),' at ','@'),',com','.com'),'gmial','gmail'),'..','.'),",
+				"          k = lower(regexReplace(insurance_provider,'[^A-Za-z]','')),",
+				"          address = trim(address)) ~> derivedColumn1",
+				"derivedColumn1 derive(date_of_birth = iif(dob_raw>=toDate('1900-01-01') && dob_raw<=currentDate(), dob_raw, toDate(null())),",
+				"          email = iif(regexMatch(email_tmp,'^[^@\\\\s]+@[^@\\\\s]+\\\\.[^@\\\\s]+$'), email_tmp, toString(null())),",
+				"          insurance_provider = case(startsWith(k,'cigna'),'Cigna',startsWith(k,'aetna'),'Aetna',startsWith(k,'bluecross'),'BlueCross',startsWith(k,'unitedhealth') || k=='uhc','UnitedHealth',k=='medicaid','Medicaid',k=='medicare','Medicare',k=='selfpay','Self-Pay','Unknown')) ~> derivedColumn2",
+				"derivedColumn2 window(over(full_name,",
+				"          address),",
+				"     asc(patient_id, true),",
+				"     rn = rowNumber()) ~> window1",
+				"window1 filter(rn==1 && !isNull(patient_id) && full_name!='') ~> filter1",
+				"filter1 select(mapColumn(",
+				"          patient_id,",
+				"          full_name,",
+				"          gender,",
+				"          date_of_birth,",
+				"          phone,",
+				"          email,",
+				"          address,",
+				"          insurance_provider",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"select1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'patients',",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     stagingSchemaName: '',",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> sink1"
+			]
+		}
+	}
+}
