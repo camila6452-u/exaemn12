@@ -1,0 +1,130 @@
+{
+	"name": "df_silver_admissions",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "srcAdmissions"
+				},
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "srcSilverPatients"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sink1"
+				}
+			],
+			"transformations": [
+				{
+					"name": "derivedColumn1"
+				},
+				{
+					"name": "derivedColumn2"
+				},
+				{
+					"name": "filter1"
+				},
+				{
+					"name": "exists1"
+				},
+				{
+					"name": "window1"
+				},
+				{
+					"name": "filter2"
+				},
+				{
+					"name": "select1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          admission_id as string,",
+				"          patient_id as string,",
+				"          admission_date as string,",
+				"          discharge_date as string,",
+				"          department as string,",
+				"          attending_doctor_id as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'bronze',",
+				"     tableName: 'admissions',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> srcAdmissions",
+				"source(output(",
+				"          patient_id as integer,",
+				"          full_name as string,",
+				"          gender as string,",
+				"          date_of_birth as date,",
+				"          phone as string,",
+				"          email as string,",
+				"          address as string,",
+				"          insurance_provider as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'patients',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> srcSilverPatients",
+				"srcAdmissions derive(admission_id = toInteger(trim(admission_id)),",
+				"          patient_id = toInteger(trim(patient_id)),",
+				"          attending_doctor_id = toInteger(trim(attending_doctor_id)),",
+				"          ad_raw = iif(regexMatch(trim(admission_date),'^\\\\d{4}-\\\\d{2}-\\\\d{2}$'), toDate(trim(admission_date),'yyyy-MM-dd'), iif(regexMatch(trim(admission_date),'^\\\\d{2}/\\\\d{2}/\\\\d{4}$'), toDate(trim(admission_date),'MM/dd/yyyy'), iif(regexMatch(trim(admission_date),'^\\\\d{2}-\\\\d{2}-\\\\d{2}$'), toDate(substring(trim(admission_date),1,6)+iif(toInteger(substring(trim(admission_date),7,2))>26,'19','20')+substring(trim(admission_date),7,2),'MM-dd-yyyy'), iif(regexMatch(trim(admission_date),'^\\\\d{2}-[A-Za-z]{3}-\\\\d{4}$'), toDate(trim(admission_date),'dd-MMM-yyyy'), iif(regexMatch(trim(admission_date),'^[A-Za-z]+ \\\\d{2}, \\\\d{4}$'), toDate(trim(admission_date),'MMMM dd, yyyy'), toDate(null())))))),",
+				"          dd_raw = iif(regexMatch(trim(discharge_date),'^\\\\d{4}-\\\\d{2}-\\\\d{2}$'), toDate(trim(discharge_date),'yyyy-MM-dd'), iif(regexMatch(trim(discharge_date),'^\\\\d{2}/\\\\d{2}/\\\\d{4}$'), toDate(trim(discharge_date),'MM/dd/yyyy'), iif(regexMatch(trim(discharge_date),'^\\\\d{2}-\\\\d{2}-\\\\d{2}$'), toDate(substring(trim(discharge_date),1,6)+iif(toInteger(substring(trim(discharge_date),7,2))>26,'19','20')+substring(trim(discharge_date),7,2),'MM-dd-yyyy'), iif(regexMatch(trim(discharge_date),'^\\\\d{2}-[A-Za-z]{3}-\\\\d{4}$'), toDate(trim(discharge_date),'dd-MMM-yyyy'), iif(regexMatch(trim(discharge_date),'^[A-Za-z]+ \\\\d{2}, \\\\d{4}$'), toDate(trim(discharge_date),'MMMM dd, yyyy'), toDate(null())))))),",
+				"          k = lower(regexReplace(department,'[^A-Za-z]',''))) ~> derivedColumn1",
+				"derivedColumn1 derive(admission_date = ad_raw,",
+				"          discharge_date = iif(dd_raw>=ad_raw && dd_raw<=currentDate(), dd_raw, toDate(null())),",
+				"          department = case(startsWith(k,'onc'),'Oncology',startsWith(k,'cardi'),'Cardiology',startsWith(k,'emerg') || k=='er','Emergency',startsWith(k,'paed') || startsWith(k,'ped'),'Pediatrics',startsWith(k,'gen'),'General Surgery',startsWith(k,'neu') || startsWith(k,'nue'),'Neurology',startsWith(k,'ortho'),'Orthopedics','Other')) ~> derivedColumn2",
+				"derivedColumn2 filter(!isNull(admission_id) && !isNull(admission_date) && admission_date<=currentDate() && !isNull(attending_doctor_id)) ~> filter1",
+				"filter1, srcSilverPatients exists(derivedColumn1@patient_id == srcSilverPatients@patient_id,",
+				"     negate:false,",
+				"     broadcast: 'auto')~> exists1",
+				"exists1 window(over(admission_id),",
+				"     asc(admission_date, true),",
+				"     rn = rowNumber()) ~> window1",
+				"window1 filter(rn==1) ~> filter2",
+				"filter2 select(mapColumn(",
+				"          admission_id,",
+				"          patient_id,",
+				"          admission_date,",
+				"          discharge_date,",
+				"          department,",
+				"          attending_doctor_id",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"select1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'admissions',",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> sink1"
+			]
+		}
+	}
+}
