@@ -1,0 +1,100 @@
+{
+	"name": "df_dim_paciente",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "srcPatients"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkDimPaciente"
+				}
+			],
+			"transformations": [
+				{
+					"name": "derivedColumn1"
+				},
+				{
+					"name": "derivedColumn2"
+				},
+				{
+					"name": "select1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          patient_id as integer,",
+				"          full_name as string,",
+				"          gender as string,",
+				"          date_of_birth as date,",
+				"          phone as string,",
+				"          email as string,",
+				"          address as string,",
+				"          insurance_provider as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'patients',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> srcPatients",
+				"derivedColumn2 derive(patient_id_bk = patient_id,",
+				"          nombre_completo = full_name,",
+				"          genero = case(gender=='Male','Masculino',gender=='Female','Femenino','Otro'),",
+				"          fecha_nacimiento = date_of_birth,",
+				"          rango_etario = case(isNull(date_of_birth),'Desconocido', floor(monthsBetween(currentDate(),date_of_birth)/12)<=18,'0-18', floor(monthsBetween(currentDate(),date_of_birth)/12)<=35,'19-35', floor(monthsBetween(currentDate(),date_of_birth)/12)<=60,'36-60','60+'),",
+				"          {correo_electronico     } = email,",
+				"          direccion = address,",
+				"          proveedor_seguro = iifNull(insurance_provider,'Unknown')) ~> derivedColumn1",
+				"srcPatients derive(edad = toInteger(floor(monthsBetween(currentDate(), date_of_birth)/12))) ~> derivedColumn2",
+				"derivedColumn1 select(mapColumn(",
+				"          patient_id_bk,",
+				"          nombre_completo,",
+				"          genero,",
+				"          fecha_nacimiento,",
+				"          rango_etario,",
+				"          {correo_electronico     },",
+				"          direccion,",
+				"          proveedor_seguro",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"select1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'gold',",
+				"     tableName: 'dim_paciente',",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError',",
+				"     mapColumn(",
+				"          patient_id_bk,",
+				"          nombre_completo,",
+				"          genero,",
+				"          fecha_nacimiento,",
+				"          rango_etario,",
+				"          {correo_electronico     },",
+				"          direccion,",
+				"          proveedor_seguro",
+				"     )) ~> sinkDimPaciente"
+			]
+		}
+	}
+}
