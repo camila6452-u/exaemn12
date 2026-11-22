@@ -1,0 +1,74 @@
+{
+	"name": "df_dim_servicio_cargo",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "dfdimserviciocargo"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkDimServicioCargo"
+				}
+			],
+			"transformations": [
+				{
+					"name": "aggregate1"
+				},
+				{
+					"name": "select1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          billing_id as integer,",
+				"          admission_id as integer,",
+				"          charge_type as string,",
+				"          amount as decimal(12,2),",
+				"          payment_status as string,",
+				"          payment_date as date",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'billing',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> dfdimserviciocargo",
+				"dfdimserviciocargo aggregate(groupBy(charge_type,",
+				"          payment_status),",
+				"     n = count()) ~> aggregate1",
+				"aggregate1 select(mapColumn(",
+				"          tipo_cargo = charge_type,",
+				"          estado_pago = payment_status",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"select1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'gold',",
+				"     tableName: 'dim_servicio_cargo',",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     stagingSchemaName: '',",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> sinkDimServicioCargo"
+			]
+		}
+	}
+}

@@ -1,0 +1,74 @@
+{
+	"name": "df_dim_departamento",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "srcAdmissions"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkDimDepartament"
+				}
+			],
+			"transformations": [
+				{
+					"name": "aggDepartamento"
+				},
+				{
+					"name": "select1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          admission_id as integer,",
+				"          patient_id as integer,",
+				"          admission_date as date,",
+				"          discharge_date as date,",
+				"          department as string,",
+				"          attending_doctor_id as integer",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'admissions',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> srcAdmissions",
+				"srcAdmissions aggregate(groupBy(department),",
+				"     n = count()) ~> aggDepartamento",
+				"aggDepartamento select(mapColumn(",
+				"          nombre_departamento = department",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"select1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'gold',",
+				"     tableName: 'dim_departamento',",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError',",
+				"     mapColumn(",
+				"          nombre_departamento",
+				"     )) ~> sinkDimDepartament"
+			]
+		}
+	}
+}
