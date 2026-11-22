@@ -1,0 +1,61 @@
+{
+	"name": "df_dim_diagnostico",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "dfdimdiagnostico"
+				}
+			],
+			"sinks": [],
+			"transformations": [
+				{
+					"name": "aggregate1"
+				},
+				{
+					"name": "derivedColumn1"
+				},
+				{
+					"name": "select1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          diagnosis_id as integer,",
+				"          admission_id as integer,",
+				"          icd_code as string,",
+				"          diagnosis_description as string,",
+				"          severity as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'silver',",
+				"     tableName: 'diagnoses',",
+				"     isolationLevel: 'READ_UNCOMMITTED') ~> dfdimdiagnostico",
+				"dfdimdiagnostico aggregate(groupBy(icd_code,",
+				"          severity),",
+				"     n = count()) ~> aggregate1",
+				"aggregate1 derive(codigo_icd = icd_code,",
+				"          nivel_severidad = severity,",
+				"          descripcion_patologia = case(icd_code=='S72.001A','Fractura de cuello femoral derecho',icd_code=='K21.9','Reflujo gastroesofagico',icd_code=='M54.5','Dolor lumbar bajo',icd_code=='R51','Cefalea',icd_code=='N39.0','Infeccion de vias urinarias',icd_code=='F32.9','Trastorno depresivo mayor',icd_code=='J45.909','Asma',icd_code=='C50.911','Neoplasia maligna de mama',icd_code=='E11.9','Diabetes tipo 2',icd_code=='I10','Hipertension esencial','Sin descripcion')) ~> derivedColumn1",
+				"derivedColumn1 select(mapColumn(",
+				"          icd_code,",
+				"          severity,",
+				"          n,",
+				"          codigo_icd,",
+				"          nivel_severidad,",
+				"          descripcion_patologia",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1"
+			]
+		}
+	}
+}
