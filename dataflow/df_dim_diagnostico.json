@@ -12,16 +12,36 @@
 					"name": "dfdimdiagnostico"
 				}
 			],
-			"sinks": [],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "ls_sql_dw",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkDimDiagnostico"
+				}
+			],
 			"transformations": [
 				{
-					"name": "aggregate1"
+					"name": "aggDiagnostico"
 				},
 				{
-					"name": "derivedColumn1"
+					"name": "derivDiag"
 				},
 				{
-					"name": "select1"
+					"name": "selDiag1"
+				},
+				{
+					"name": "aggVacio"
+				},
+				{
+					"name": "derivNA"
+				},
+				{
+					"name": "selDiag2"
+				},
+				{
+					"name": "union1"
 				}
 			],
 			"scriptLines": [
@@ -41,20 +61,42 @@
 				"     isolationLevel: 'READ_UNCOMMITTED') ~> dfdimdiagnostico",
 				"dfdimdiagnostico aggregate(groupBy(icd_code,",
 				"          severity),",
-				"     n = count()) ~> aggregate1",
-				"aggregate1 derive(codigo_icd = icd_code,",
+				"     n = count()) ~> aggDiagnostico",
+				"aggDiagnostico derive(codigo_icd = icd_code,",
 				"          nivel_severidad = severity,",
-				"          descripcion_patologia = case(icd_code=='S72.001A','Fractura de cuello femoral derecho',icd_code=='K21.9','Reflujo gastroesofagico',icd_code=='M54.5','Dolor lumbar bajo',icd_code=='R51','Cefalea',icd_code=='N39.0','Infeccion de vias urinarias',icd_code=='F32.9','Trastorno depresivo mayor',icd_code=='J45.909','Asma',icd_code=='C50.911','Neoplasia maligna de mama',icd_code=='E11.9','Diabetes tipo 2',icd_code=='I10','Hipertension esencial','Sin descripcion')) ~> derivedColumn1",
-				"derivedColumn1 select(mapColumn(",
-				"          icd_code,",
-				"          severity,",
-				"          n,",
+				"          descripcion_patologia = case(icd_code=='S72.001A','Fractura de cuello femoral derecho',icd_code=='K21.9','Reflujo gastroesofagico',icd_code=='M54.5','Dolor lumbar bajo',icd_code=='R51','Cefalea',icd_code=='N39.0','Infeccion de vias urinarias',icd_code=='F32.9','Trastorno depresivo mayor',icd_code=='J45.909','Asma',icd_code=='C50.911','Neoplasia maligna de mama',icd_code=='E11.9','Diabetes tipo 2',icd_code=='I10','Hipertension esencial','Sin descripcion')) ~> derivDiag",
+				"derivDiag select(mapColumn(",
 				"          codigo_icd,",
 				"          nivel_severidad,",
 				"          descripcion_patologia",
 				"     ),",
 				"     skipDuplicateMapInputs: true,",
-				"     skipDuplicateMapOutputs: true) ~> select1"
+				"     skipDuplicateMapOutputs: true) ~> selDiag1",
+				"aggDiagnostico aggregate(n = count()) ~> aggVacio",
+				"aggVacio derive(codigo_icd = 'N/A',",
+				"          descripcion_patologia = 'Sin diagnostico registrado',",
+				"          nivel_severidad = 'Unknown') ~> derivNA",
+				"derivNA select(mapColumn(",
+				"          codigo_icd,",
+				"          descripcion_patologia,",
+				"          nivel_severidad",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selDiag2",
+				"selDiag1, selDiag2 union(byName: true)~> union1",
+				"union1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'table',",
+				"     store: 'sqlserver',",
+				"     schemaName: 'gold',",
+				"     tableName: 'dim_diagnostico',",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     deletable: false,",
+				"     upsertable: false,",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> sinkDimDiagnostico"
 			]
 		}
 	}
