@@ -152,7 +152,7 @@
 				"     errorHandlingOption: 'stopOnFirstError',",
 				"     mapColumn(",
 				"          fecha_key,",
-				"          {fecha_completa     },",
+				"          fecha_completa = {fecha_completa     },",
 				"          anio,",
 				"          trimestre,",
 				"          mes,",
