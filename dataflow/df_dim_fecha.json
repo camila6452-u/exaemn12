@@ -51,7 +51,7 @@
 					"name": "derivedColumn1"
 				},
 				{
-					"name": "derivedColumn2"
+					"name": "derivedColumn2fechas"
 				},
 				{
 					"name": "select3"
@@ -118,9 +118,9 @@
 				"          dia_mes = toByte(dayOfMonth(fecha)),",
 				"          dia_semana = toByte(iif(dayOfWeek(fecha)==1,7,dayOfWeek(fecha)-1))) ~> derivedColumn1",
 				"derivedColumn1 derive(trimestre_nombre = 'T'+toString(trimestre),",
-				"          dia_nombre = ['Lunes','Martes','Miercoles','Jueves','Viernes','Sabado','Domingo'][dia_semana],",
-				"          {es_fin_de_semana     } = dia_semana>=6) ~> derivedColumn2",
-				"derivedColumn2 select(mapColumn(",
+				"          dia_nombre = case(dayOfWeek(fecha)==2,'Lunes',dayOfWeek(fecha)==3,'Martes',dayOfWeek(fecha)==4,'Miercoles',dayOfWeek(fecha)==5,'Jueves',dayOfWeek(fecha)==6,'Viernes',dayOfWeek(fecha)==7,'Sabado','Domingo'),",
+				"          {es_fin_de_semana     } = iif(dayOfWeek(fecha)==1 || dayOfWeek(fecha)==7, true(), false())) ~> derivedColumn2fechas",
+				"derivedColumn2fechas select(mapColumn(",
 				"          fecha_key,",
 				"          {fecha_completa     },",
 				"          anio,",
