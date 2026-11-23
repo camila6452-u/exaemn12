@@ -25,7 +25,7 @@
 						"referenceName": "ls_sql_dw",
 						"type": "LinkedServiceReference"
 					},
-					"name": "sink1"
+					"name": "sinkDimFecha"
 				}
 			],
 			"transformations": [
@@ -163,8 +163,8 @@
 				"          dia_semana,",
 				"          trimestre_nombre,",
 				"          dia_nombre,",
-				"          {es_fin_de_semana     }",
-				"     )) ~> sink1"
+				"          es_fin_de_semana = {es_fin_de_semana     }",
+				"     )) ~> sinkDimFecha"
 			]
 		}
 	}
